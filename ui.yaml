@@ -1,0 +1,268 @@
+openapi: 3.0.3
+info:
+  title: Фильтр «Вывод → Реестр»
+  version: "1.0"
+  description: >
+    Запросы людей. Правила A, B и C проверяются здесь, до записи в реестр.
+    В Authorize вставьте токен без слова Bearer.
+servers:
+  - url: http://127.0.0.1:8091
+tags:
+  - name: Вход
+    description: Ф-9
+  - name: Чат
+    description: З-1, З-2, З-5
+  - name: Журнал
+    description: З-3, З-4
+  - name: Вызовы
+    description: Ф-10
+  - name: Правила
+    description: З-7, Ф-8
+paths:
+  /api/v1/auth/login:
+    post:
+      tags: [Вход]
+      summary: Войти и получить токен
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              login: employee
+              password: lab
+      responses:
+        "200":
+          description: Токен роли
+        "401":
+          description: Неверный пароль
+  /api/v1/auth/me:
+    get:
+      tags: [Вход]
+      summary: Кто вошёл
+      responses:
+        "200":
+          description: Логин, роль и user_id
+        "401":
+          description: Нет токена
+  /api/v1/chat/messages:
+    post:
+      tags: [Чат]
+      summary: Задать вопрос по тексту документа
+      description: >
+        Ищет фразу списка. Если фразы нет, отдаёт ответ модели и в реестр не пишет.
+        Если фраза есть, отдаёт только «ответ отклонён» и пишет карточку.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              question: Как войти в узел?
+              topic: доступ
+              document_text: В файле узла пароль хранится открыто.
+      responses:
+        "201":
+          description: Реплика чата без фразы и уровня
+        "403":
+          description: Чат доступен сотруднику
+        "422":
+          description: Нет вопроса, темы или текста
+    get:
+      tags: [Чат]
+      summary: Свои реплики
+      responses:
+        "200":
+          description: Список реплик текущего сотрудника
+  /api/v1/chat/messages/{turn_id}:
+    get:
+      tags: [Чат]
+      summary: Одна своя реплика
+      parameters:
+        - $ref: "#/components/parameters/TurnId"
+      responses:
+        "200":
+          description: Реплика
+        "404":
+          description: Реплика не найдена
+  /api/v1/journal:
+    get:
+      tags: [Журнал]
+      summary: Список отказов
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+        - $ref: "#/components/parameters/Phrase"
+        - $ref: "#/components/parameters/DateFrom"
+        - $ref: "#/components/parameters/DateTo"
+        - name: code
+          in: query
+          schema: {type: string}
+        - name: level
+          in: query
+          schema: {type: string}
+        - name: delivered
+          in: query
+          schema: {type: string, enum: ["true", "false"]}
+      responses:
+        "200":
+          description: Строки журнала
+        "403":
+          description: Журнал закрыт для этой роли
+  /api/v1/journal/summary:
+    get:
+      tags: [Журнал]
+      summary: Сколько отказов по коду и уровню
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: Сводка
+  /api/v1/journal/{id}:
+    get:
+      tags: [Журнал]
+      summary: Карточка отказа
+      parameters:
+        - $ref: "#/components/parameters/CardId"
+      responses:
+        "200":
+          description: Кто, вопрос, фраза, кусок документа
+        "404":
+          description: Карточка не найдена
+  /api/v1/journal/{id}/phrases:
+    get:
+      tags: [Журнал]
+      summary: Прошлые фразы карточки L4
+      parameters:
+        - $ref: "#/components/parameters/CardId"
+      responses:
+        "200":
+          description: Список прошлых фраз
+  /api/v1/journal/{id}/delivery:
+    get:
+      tags: [Журнал]
+      summary: Дошла ли запись
+      parameters:
+        - $ref: "#/components/parameters/CardId"
+      responses:
+        "200":
+          description: Попытки и пометка
+  /api/v1/calls:
+    get:
+      tags: [Вызовы]
+      summary: Журнал вызовов webhook
+      responses:
+        "200":
+          description: Время, адрес и код ответа
+  /api/v1/rules:
+    get:
+      tags: [Правила]
+      summary: Сводка правил без токена
+      responses:
+        "200":
+          description: Фразы, пороги и признак token_set
+  /api/v1/rules/phrases:
+    get:
+      tags: [Правила]
+      summary: Список фраз
+      responses:
+        "200":
+          description: Фразы
+    put:
+      tags: [Правила]
+      summary: Записать список фраз
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              phrases: ["пароль", "ключ доступа", "закрытый узел"]
+      responses:
+        "200":
+          description: Сохранённый список
+  /api/v1/rules/limits:
+    get:
+      tags: [Правила]
+      summary: Пороги N и T
+      responses:
+        "200":
+          description: N и T
+    put:
+      tags: [Правила]
+      summary: Записать N и T
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example: {N: 3, T: 60}
+      responses:
+        "200":
+          description: Сохранённые пороги
+        "422":
+          description: N меньше 1 или T меньше 0
+  /api/v1/rules/delivery:
+    get:
+      tags: [Правила]
+      summary: T1, T2 и адрес реестра
+      responses:
+        "200":
+          description: Параметры доставки без самого токена
+    put:
+      tags: [Правила]
+      summary: Записать параметры доставки
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              T1: 0
+              T2: 0
+              registry_url: http://127.0.0.2:8092
+              token: lab-service
+      responses:
+        "200":
+          description: Сохранено, токен в ответе не показан
+  /api/v1/rules/reload:
+    post:
+      tags: [Правила]
+      summary: Перечитать settings.txt
+      responses:
+        "200":
+          description: Правила заново прочитаны в память фильтра
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    TurnId:
+      name: turn_id
+      in: path
+      required: true
+      schema: {type: integer}
+    CardId:
+      name: id
+      in: path
+      required: true
+      schema: {type: string}
+      example: "1"
+    UserId:
+      name: user_id
+      in: query
+      schema: {type: string}
+      example: user_17
+    Phrase:
+      name: phrase
+      in: query
+      schema: {type: string}
+      example: пароль
+    DateFrom:
+      name: date_from
+      in: query
+      schema: {type: string}
+      example: "2026-10-30"
+    DateTo:
+      name: date_to
+      in: query
+      schema: {type: string}
+      example: "2026-10-30"
+security:
+  - BearerAuth: []

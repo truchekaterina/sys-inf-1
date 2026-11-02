@@ -1,0 +1,198 @@
+openapi: 3.0.3
+info:
+  title: Реестр «Вывод → Реестр»
+  version: "1.0"
+  description: >
+    Запросы слоя данных. Ролей нет. В Authorize вставьте ключ lab-service.
+    Код pass сюда не записывается.
+servers:
+  - url: http://127.0.0.2:8092
+tags:
+  - name: Карточки
+    description: З-1, З-3, З-5, З-6
+  - name: Доставки
+    description: З-4, З-6
+  - name: Справочники
+    description: Служебные подписи кодов и уровней
+  - name: Стенд
+    description: Служебный переключатель приёма
+paths:
+  /db/v1/cards:
+    get:
+      tags: [Карточки]
+      summary: Список карточек
+      parameters:
+        - name: user_id
+          in: query
+          schema: {type: string}
+        - name: topic
+          in: query
+          schema: {type: string}
+        - name: code
+          in: query
+          schema: {type: string}
+        - name: level
+          in: query
+          schema: {type: string}
+        - name: phrase
+          in: query
+          schema: {type: string}
+        - name: since
+          in: query
+          schema: {type: string}
+        - name: date_from
+          in: query
+          schema: {type: string}
+        - name: date_to
+          in: query
+          schema: {type: string}
+      responses:
+        "200":
+          description: Карточки, которые реестр принял
+    post:
+      tags: [Карточки]
+      summary: Принять карточку webhook
+      description: Повтор с тем же idempotency_key не создаёт вторую карточку.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              idempotency_key: demo-key
+              created_at: "2026-10-30T08:40:00Z"
+              user_id: user_17
+              question: Как войти в узел?
+              topic: доступ
+              phrase: пароль
+              snippet: …пароль хранится в файле узла…
+              code: danger_phrase
+              level: L3
+              attempt: 1
+              prior_phrases: []
+      responses:
+        "201":
+          description: Карточка записана
+        "200":
+          description: Повтор той же карточки
+        "409":
+          description: Ключ уже занят другой карточкой
+        "422":
+          description: В реестр нельзя записать pass
+        "503":
+          description: Приём выключен
+  /db/v1/cards/count:
+    get:
+      tags: [Карточки]
+      summary: Сколько danger_phrase у id по теме за окно
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          schema: {type: string}
+        - name: topic
+          in: query
+          required: true
+          schema: {type: string}
+        - name: since
+          in: query
+          required: true
+          schema: {type: string}
+          example: "2026-10-30T00:00:00Z"
+      responses:
+        "200":
+          description: Число отказов L3
+  /db/v1/cards/{id}:
+    get:
+      tags: [Карточки]
+      summary: Карточка с прошлыми фразами
+      parameters:
+        - $ref: "#/components/parameters/CardId"
+      responses:
+        "200":
+          description: Карточка
+        "404":
+          description: Нет карточки
+  /db/v1/cards/{id}/phrases:
+    get:
+      tags: [Карточки]
+      summary: Прошлые фразы карточки
+      parameters:
+        - $ref: "#/components/parameters/CardId"
+      responses:
+        "200":
+          description: История фраз
+  /db/v1/deliveries:
+    get:
+      tags: [Доставки]
+      summary: Все доставки
+      responses:
+        "200":
+          description: Попытки, которые реестр принял
+  /db/v1/deliveries/{card_id}:
+    get:
+      tags: [Доставки]
+      summary: Доставки одной карточки
+      parameters:
+        - name: card_id
+          in: path
+          required: true
+          schema: {type: integer}
+      responses:
+        "200":
+          description: Попытки карточки
+        "404":
+          description: Нет карточки
+  /db/v1/codes:
+    get:
+      tags: [Справочники]
+      summary: Коды pass, danger_phrase, topic_burst
+      responses:
+        "200":
+          description: Подписи кодов
+  /db/v1/levels:
+    get:
+      tags: [Справочники]
+      summary: Уровни L1, L3, L4
+      responses:
+        "200":
+          description: Подписи уровней
+  /db/v1/stand/health:
+    get:
+      tags: [Стенд]
+      summary: Реестр отвечает
+      responses:
+        "200":
+          description: status ok
+  /db/v1/stand/mode:
+    get:
+      tags: [Стенд]
+      summary: Принимает ли реестр карточки
+      responses:
+        "200":
+          description: accept
+    put:
+      tags: [Стенд]
+      summary: Включить или выключить приём
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example: {accept: true}
+      responses:
+        "200":
+          description: Новое состояние
+components:
+  securitySchemes:
+    ServiceKey:
+      type: apiKey
+      in: header
+      name: X-Service-Key
+  parameters:
+    CardId:
+      name: id
+      in: path
+      required: true
+      schema: {type: integer}
+      example: 1
+security:
+  - ServiceKey: []
